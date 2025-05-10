@@ -1,0 +1,211 @@
+from collections import deque
+
+#####################################
+# ЧАСТЬ A: РЕАЛИЗАЦИИ ОЧЕРЕДИ
+#####################################
+
+class ArrayQueue:
+    def __init__(self):
+        self.items = []
+    
+    def enqueue(self, item):
+        self.items.insert(0, item)
+    
+    def dequeue(self):
+        return self.items.pop() if self.items else None
+    
+    def is_empty(self):
+        return len(self.items) == 0
+
+class LinkedListQueue:
+    class Node:
+        def __init__(self, data):
+            self.data = data
+            self.next = None
+    
+    def __init__(self):
+        self.front = None
+        self.rear = None
+    
+    def enqueue(self, item):
+        new_node = self.Node(item)
+        if self.rear is None:
+            self.front = self.rear = new_node
+        else:
+            self.rear.next = new_node
+            self.rear = new_node
+    
+    def dequeue(self):
+        if self.front is None:
+            return None
+        temp = self.front
+        self.front = temp.next
+        if self.front is None:
+            self.rear = None
+        return temp.data
+    
+    def is_empty(self):
+        return self.front is None
+
+class StdLibQueue:
+    def __init__(self):
+        self.items = deque()
+    
+    def enqueue(self, item):
+        self.items.appendleft(item)
+    
+    def dequeue(self):
+        return self.items.pop() if self.items else None
+    
+    def is_empty(self):
+        return len(self.items) == 0
+
+#####################################
+# ЧАСТЬ B: РАСЧЕТ ВОДЫ
+#####################################
+
+def calculate_water_after_lifting(matrix):
+    if len(matrix) < 3 or len(matrix[0]) < 3:
+        return 0
+    
+    volume = 0
+    for i in range(1, len(matrix)-1):
+        for j in range(1, len(matrix[0])-1):
+            min_surrounding = min(
+                matrix[i-1][j],
+                matrix[i+1][j],
+                matrix[i][j-1],
+                matrix[i][j+1]
+            )
+            if min_surrounding > matrix[i][j]:
+                volume += min_surrounding - matrix[i][j]
+    return volume
+
+def pour_water(matrix, i0, j0, V, queue_impl):
+    m, n = len(matrix), len(matrix[0])
+    water = [row[:] for row in matrix]
+    queue = queue_impl()
+    queue.enqueue((i0, j0))
+    total_added = 0
+    
+    while not queue.is_empty() and V > 0:
+        i, j = queue.dequeue()
+        
+        if i == 0 or i == m-1 or j == 0 or j == n-1:
+            continue
+        
+        water[i][j] += 1
+        total_added += 1
+        V -= 1
+        
+        for di, dj in [(-1,0),(1,0),(0,-1),(0,1)]:
+            ni, nj = i + di, j + dj
+            if 0 <= ni < m and 0 <= nj < n and water[ni][nj] <= water[i][j]:
+                queue.enqueue((ni, nj))
+    
+    print(f"Из {V + total_added} единиц воды добавлено {total_added}, вытекло {V}")
+    return water
+
+# Остальной код (интерфейс пользователя)
+def input_matrix():
+    while True:
+        try:
+            m = int(input("Введите количество строк матрицы (M >= 3): "))
+            n = int(input("Введите количество столбцов матрицы (N >= 3): "))
+            if m < 3 or n < 3:
+                print("Размеры должны быть не менее 3x3!")
+                continue
+            
+            print(f"\nВведите матрицу {m}x{n} (построчно, числа через пробел):")
+            matrix = []
+            for i in range(m):
+                while True:
+                    row = input(f"Строка {i+1}: ").strip().split()
+                    if len(row) != n:
+                        print(f"Ожидается {n} чисел!")
+                        continue
+                    try:
+                        row = [int(num) for num in row]
+                        matrix.append(row)
+                        break
+                    except ValueError:
+                        print("Все элементы должны быть целыми числами!")
+            return matrix
+        except ValueError:
+            print("Пожалуйста, введите целые числа!")
+
+def print_matrix(matrix):
+    for row in matrix:
+        print(" ".join(map(str, row)))
+
+def main():
+    print("Программа расчета объема воды в форме")
+    matrix = input_matrix()
+    
+    while True:
+        print("\nМеню:")
+        print("1. Рассчитать объем воды после полного погружения и подъема")
+        print("2. Залить воду в конкретную точку")
+        print("3. Ввести новую матрицу")
+        print("4. Выход")
+        
+        choice = input("Выберите действие: ")
+        
+        if choice == "1":
+            volume = calculate_water_after_lifting(matrix)
+            print(f"\nОбъем оставшейся воды: {volume}")
+        
+        elif choice == "2":
+            try:
+                print("\nТекущая матрица:")
+                print_matrix(matrix)
+                
+                i = int(input(f"\nВведите строку точки заливки (от 1 до {len(matrix)}): ")) - 1
+                j = int(input(f"Введите столбец точки заливки (от 1 до {len(matrix[0])}): ")) - 1
+                
+                if not (0 <= i < len(matrix) and 0 <= j < len(matrix[0])):
+                    print("Неверные координаты!")
+                    continue
+                
+                v = int(input("Введите объем воды для заливки: "))
+                if v <= 0:
+                    print("Объем должен быть положительным!")
+                    continue
+                
+                print("\nВыберите реализацию очереди:")
+                print("1 - Массив")
+                print("2 - Связанный список")
+                print("3 - Стандартная библиотека")
+                impl_choice = input("Ваш выбор: ")
+                
+                if impl_choice == "1":
+                    queue = ArrayQueue
+                elif impl_choice == "2":
+                    queue = LinkedListQueue
+                elif impl_choice == "3":
+                    queue = StdLibQueue
+                else:
+                    print("Неверный выбор!")
+                    continue
+                
+                result = pour_water(matrix, i, j, v, queue)
+                print("\nРезультат заливки:")
+                print_matrix(result)
+            
+            except ValueError:
+                print("Ошибка ввода данных!")
+        
+        elif choice == "3":
+            matrix = input_matrix()
+        
+        elif choice == "4":
+            print("Выход из программы")
+            break
+        
+        else:
+            print("Неверный выбор!")
+
+if __name__ == "__main__":
+    main()3
+
+    
