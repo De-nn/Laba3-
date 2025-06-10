@@ -1,7 +1,8 @@
+import heapq
 from collections import deque
 
 #####################################
-# ЧАСТЬ A: РЕАЛИЗАЦИИ ОЧЕРЕДИ
+# ЧАСТЬ A: РЕАЛИЗАЦИИ ОЧЕРЕДИ (ИСПРАВЛЕННЫЕ)
 #####################################
 
 class ArrayQueue:
@@ -9,10 +10,10 @@ class ArrayQueue:
         self.items = []
     
     def enqueue(self, item):
-        self.items.insert(0, item)
+        self.items.append(item)
     
     def dequeue(self):
-        return self.items.pop() if self.items else None
+        return self.items.pop(0) if self.items else None
     
     def is_empty(self):
         return len(self.items) == 0
@@ -52,60 +53,177 @@ class StdLibQueue:
         self.items = deque()
     
     def enqueue(self, item):
-        self.items.appendleft(item)
+        self.items.append(item)
     
     def dequeue(self):
-        return self.items.pop() if self.items else None
+        return self.items.popleft() if self.items else None
     
     def is_empty(self):
         return len(self.items) == 0
 
 #####################################
-# ЧАСТЬ B: РАСЧЕТ ВОДЫ
+# ЧАСТЬ B: РЕАЛИЗАЦИИ ПРИОРИТЕТНОЙ ОЧЕРЕДИ ДЛЯ ЗАЛИВКИ ВОДЫ
+#####################################
+
+class ArrayPriorityQueue:
+    def __init__(self):
+        self.items = []
+    
+    def push(self, priority, item):
+        self.items.append((priority, item))
+    
+    def pop(self):
+        if not self.items:
+            return None
+        min_idx = 0
+        min_priority = self.items[0][0]
+        for i in range(1, len(self.items)):
+            if self.items[i][0] < min_priority:
+                min_priority = self.items[i][0]
+                min_idx = i
+        return self.items.pop(min_idx)
+    
+    def is_empty(self):
+        return len(self.items) == 0
+
+class LinkedListPriorityQueue:
+    class Node:
+        __slots__ = 'priority', 'item', 'next'
+        def __init__(self, priority, item):
+            self.priority = priority
+            self.item = item
+            self.next = None
+    
+    def __init__(self):
+        self.head = None
+    
+    def push(self, priority, item):
+        new_node = self.Node(priority, item)
+        if self.head is None:
+            self.head = new_node
+        else:
+            new_node.next = self.head
+            self.head = new_node
+    
+    def pop(self):
+        if self.head is None:
+            return None
+        
+        # Находим минимальный элемент и его предыдущий элемент
+        min_node = self.head
+        prev_node = None
+        current = self.head
+        prev_min = None
+        
+        while current:
+            if current.priority < min_node.priority:
+                min_node = current
+                prev_min = prev_node
+            prev_node = current
+            current = current.next
+        
+        # Удаляем минимальный элемент
+        if prev_min is None:
+            self.head = min_node.next
+        else:
+            prev_min.next = min_node.next
+        
+        return (min_node.priority, min_node.item)
+    
+    def is_empty(self):
+        return self.head is None
+
+class StdLibPriorityQueue:
+    def __init__(self):
+        self.items = []
+    
+    def push(self, priority, item):
+        heapq.heappush(self.items, (priority, item))
+    
+    def pop(self):
+        if not self.items:
+            return None
+        return heapq.heappop(self.items)
+    
+    def is_empty(self):
+        return len(self.items) == 0
+
+#####################################
+# ЧАСТЬ C: РАСЧЕТ ВОДЫ (ИСПРАВЛЕННЫЕ АЛГОРИТМЫ)
 #####################################
 
 def calculate_water_after_lifting(matrix):
-    if len(matrix) < 3 or len(matrix[0]) < 3:
+    if not matrix or not matrix[0]:
+        return 0
+    m, n = len(matrix), len(matrix[0])
+    if m < 3 or n < 3:
         return 0
     
+    heap = []
+    visited = [[False] * n for _ in range(m)]
     volume = 0
-    for i in range(1, len(matrix)-1):
-        for j in range(1, len(matrix[0])-1):
-            min_surrounding = min(
-                matrix[i-1][j],
-                matrix[i+1][j],
-                matrix[i][j-1],
-                matrix[i][j+1]
-            )
-            if min_surrounding > matrix[i][j]:
-                volume += min_surrounding - matrix[i][j]
+    
+    # Добавляем граничные клетки
+    for i in range(m):
+        for j in range(n):
+            if i == 0 or i == m-1 or j == 0 or j == n-1:
+                heapq.heappush(heap, (matrix[i][j], i, j))
+                visited[i][j] = True
+    
+    # Обработка внутренних клеток
+    while heap:
+        h, i, j = heapq.heappop(heap)
+        for di, dj in [(-1,0), (1,0), (0,-1), (0,1)]:
+            ni, nj = i + di, j + dj
+            if 0 <= ni < m and 0 <= nj < n and not visited[ni][nj]:
+                # Если высота текущей клетки больше высоты соседа
+                if h > matrix[ni][nj]:
+                    volume += h - matrix[ni][nj]
+                    heapq.heappush(heap, (h, ni, nj))
+                else:
+                    heapq.heappush(heap, (matrix[ni][nj], ni, nj))
+                visited[ni][nj] = True
+    
     return volume
 
-def pour_water(matrix, i0, j0, V, queue_impl):
+def pour_water(matrix, i0, j0, V, priority_queue_impl):
     m, n = len(matrix), len(matrix[0])
     water = [row[:] for row in matrix]
-    queue = queue_impl()
-    queue.enqueue((i0, j0))
+    heap = priority_queue_impl()
+    heap.push(water[i0][j0], (i0, j0))
     total_added = 0
     
-    while not queue.is_empty() and V > 0:
-        i, j = queue.dequeue()
+    while V > 0 and not heap.is_empty():
+        h, (i, j) = heap.pop()
         
+        # Проверка актуальности состояния
+        if h != water[i][j]:
+            continue
+        
+        # Проверка границ
         if i == 0 or i == m-1 or j == 0 or j == n-1:
             continue
         
+        # Добавление воды
         water[i][j] += 1
         total_added += 1
         V -= 1
         
-        for di, dj in [(-1,0),(1,0),(0,-1),(0,1)]:
+        # Обновление текущей клетки
+        heap.push(water[i][j], (i, j))
+        
+        # Добавление соседей
+        for di, dj in [(-1,0), (1,0), (0,-1), (0,1)]:
             ni, nj = i + di, j + dj
-            if 0 <= ni < m and 0 <= nj < n and water[ni][nj] <= water[i][j]:
-                queue.enqueue((ni, nj))
+            if 0 <= ni < m and 0 <= nj < n:
+                heap.push(water[ni][nj], (ni, nj))
     
     print(f"Из {V + total_added} единиц воды добавлено {total_added}, вытекло {V}")
     return water
 
+#####################################
+# ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ И MAIN
+#####################################
 
 def input_matrix():
     while True:
@@ -163,7 +281,7 @@ def main():
                 i = int(input(f"\nВведите строку точки заливки (от 1 до {len(matrix)}): ")) - 1
                 j = int(input(f"Введите столбец точки заливки (от 1 до {len(matrix[0])}): ")) - 1
                 
-                if not (0 <= i < len(matrix) and 0 <= j < len(matrix[0])):
+                if not  i < len(matrix) and (0 <= j < len(matrix[0])):
                     print("Неверные координаты!")
                     continue
                 
@@ -172,18 +290,18 @@ def main():
                     print("Объем должен быть положительным!")
                     continue
                 
-                print("\nВыберите реализацию очереди:")
-                print("1 - Массив")
-                print("2 - Связанный список")
+                print("\nВыберите реализацию приоритетной очереди:")
+                print("1 - На массиве")
+                print("2 - На связанном списке")
                 print("3 - Стандартная библиотека")
                 impl_choice = input("Ваш выбор: ")
                 
                 if impl_choice == "1":
-                    queue = ArrayQueue
+                    queue = ArrayPriorityQueue
                 elif impl_choice == "2":
-                    queue = LinkedListQueue
+                    queue = LinkedListPriorityQueue
                 elif impl_choice == "3":
-                    queue = StdLibQueue
+                    queue = StdLibPriorityQueue
                 else:
                     print("Неверный выбор!")
                     continue
@@ -207,5 +325,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-    
