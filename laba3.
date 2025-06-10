@@ -1,15 +1,18 @@
 from collections import deque
-import time
+
+#####################################
+# ЧАСТЬ A: РЕАЛИЗАЦИИ ОЧЕРЕДИ
+#####################################
 
 class ArrayQueue:
     def __init__(self):
         self.items = []
     
     def enqueue(self, item):
-        self.items.append(item)
+        self.items.insert(0, item)
     
     def dequeue(self):
-        return self.items.pop(0) if self.items else None
+        return self.items.pop() if self.items else None
     
     def is_empty(self):
         return len(self.items) == 0
@@ -49,110 +52,60 @@ class StdLibQueue:
         self.items = deque()
     
     def enqueue(self, item):
-        self.items.append(item)
+        self.items.appendleft(item)
     
     def dequeue(self):
-        return self.items.popleft() if self.items else None
+        return self.items.pop() if self.items else None
     
     def is_empty(self):
         return len(self.items) == 0
 
+#####################################
+# ЧАСТЬ B: РАСЧЕТ ВОДЫ
+#####################################
+
 def calculate_water_after_lifting(matrix):
     if len(matrix) < 3 or len(matrix[0]) < 3:
         return 0
-        
-    m, n = len(matrix), len(matrix[0])
-    water_level = [[float('inf')] * n for _ in range(m)]
-    queue = deque()
-    
-    for i in range(m):
-        for j in range(n):
-            if i == 0 or i == m-1 or j == 0 or j == n-1:
-                water_level[i][j] = matrix[i][j]
-                queue.append((i, j))
-    
-    while queue:
-        i, j = queue.popleft()
-        for di, dj in [(-1,0), (1,0), (0,-1), (0,1)]:
-            ni, nj = i + di, j + dj
-            if 0 <= ni < m and 0 <= nj < n:
-                new_level = max(matrix[ni][nj], water_level[i][j])
-                if water_level[ni][nj] > new_level:
-                    water_level[ni][nj] = new_level
-                    queue.append((ni, nj))
     
     volume = 0
-    for i in range(m):
-        for j in range(n):
-            volume += water_level[i][j] - matrix[i][j]
-    
+    for i in range(1, len(matrix)-1):
+        for j in range(1, len(matrix[0])-1):
+            min_surrounding = min(
+                matrix[i-1][j],
+                matrix[i+1][j],
+                matrix[i][j-1],
+                matrix[i][j+1]
+            )
+            if min_surrounding > matrix[i][j]:
+                volume += min_surrounding - matrix[i][j]
     return volume
 
 def pour_water(matrix, i0, j0, V, queue_impl):
     m, n = len(matrix), len(matrix[0])
-    water = [[0] * n for _ in range(m)]
-    leaked = 0
-
-    for _ in range(V):
-        if pour_one_drop(matrix, water, i0, j0, queue_impl):
-            leaked += 1
-
-    total_added = V - leaked
-    print(f"Из {V} единиц воды добавлено {total_added}, вытекло {leaked}")
-    
-    result = []
-    for i in range(m):
-        row = []
-        for j in range(n):
-            row.append(matrix[i][j] + water[i][j])
-        result.append(row)
-    return result
-
-def pour_one_drop(matrix, water, i0, j0, queue_impl):
-    m, n = len(matrix), len(matrix[0])
-    visited = [[False] * n for _ in range(m)]
+    water = [row[:] for row in matrix]
     queue = queue_impl()
-    
     queue.enqueue((i0, j0))
-    visited[i0][j0] = True
-    min_level = float('inf')
-    min_cells = []
-    found_boundary = False
-
-    while not queue.is_empty():
+    total_added = 0
+    
+    while not queue.is_empty() and V > 0:
         i, j = queue.dequeue()
         
         if i == 0 or i == m-1 or j == 0 or j == n-1:
-            found_boundary = True
-            break
-            
-        for di, dj in [(-1,0), (1,0), (0,-1), (0,1)]:
+            continue
+        
+        water[i][j] += 1
+        total_added += 1
+        V -= 1
+        
+        for di, dj in [(-1,0),(1,0),(0,-1),(0,1)]:
             ni, nj = i + di, j + dj
-            if not (0 <= ni < m and 0 <= nj < n) or visited[ni][nj]:
-                continue
-                
-            current_level = matrix[i][j] + water[i][j]
-            neighbor_level = matrix[ni][nj] + water[ni][nj]
-            
-            if neighbor_level <= current_level:
-                visited[ni][nj] = True
+            if 0 <= ni < m and 0 <= nj < n and water[ni][nj] <= water[i][j]:
                 queue.enqueue((ni, nj))
-                
-                if neighbor_level < min_level:
-                    min_level = neighbor_level
-                    min_cells = [(ni, nj)]
-                elif neighbor_level == min_level:
-                    min_cells.append((ni, nj))
     
-    if found_boundary:
-        return 1
-    else:
-        if min_cells:
-            i_min, j_min = min_cells[0]
-        else:
-            i_min, j_min = i0, j0
-        water[i_min][j_min] += 1
-        return 0
+    print(f"Из {V + total_added} единиц воды добавлено {total_added}, вытекло {V}")
+    return water
+
 
 def input_matrix():
     while True:
@@ -185,15 +138,6 @@ def print_matrix(matrix):
     for row in matrix:
         print(" ".join(map(str, row)))
 
-def benchmark_queue(queue_impl, size=10000):
-    start = time.time()
-    q = queue_impl()
-    for i in range(size):
-        q.enqueue(i)
-    for i in range(size):
-        q.dequeue()
-    return time.time() - start
-
 def main():
     print("Программа расчета объема воды в форме")
     matrix = input_matrix()
@@ -202,9 +146,8 @@ def main():
         print("\nМеню:")
         print("1. Рассчитать объем воды после полного погружения и подъема")
         print("2. Залить воду в конкретную точку")
-        print("3. Сравнить производительность реализаций очереди")
-        print("4. Ввести новую матрицу")
-        print("5. Выход")
+        print("3. Ввести новую матрицу")
+        print("4. Выход")
         
         choice = input("Выберите действие: ")
         
@@ -253,19 +196,9 @@ def main():
                 print("Ошибка ввода данных!")
         
         elif choice == "3":
-            sizes = [1000, 10000, 100000]
-            print("\nТестирование производительности:")
-            print("Размер | Массив | Список | STL")
-            for size in sizes:
-                t_arr = benchmark_queue(ArrayQueue, size)
-                t_list = benchmark_queue(LinkedListQueue, size)
-                t_std = benchmark_queue(StdLibQueue, size)
-                print(f"{size:6} | {t_arr:.5f} | {t_list:.5f} | {t_std:.5f}")
-        
-        elif choice == "4":
             matrix = input_matrix()
         
-        elif choice == "5":
+        elif choice == "4":
             print("Выход из программы")
             break
         
@@ -274,3 +207,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+    
